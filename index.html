@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Bible Banger</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0f766e" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <style>
+    :root{--bg:#0b1220;--card:#121a2b;--txt:#eaf2ff;--muted:#9fb3d1;--acc:#14b8a6;--danger:#ef4444}
+    *{box-sizing:border-box} body{margin:0;background:linear-gradient(180deg,#09101d,#0b1220 40%);}
+    body,button,input{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;color:var(--txt)}
+    header{padding:18px 16px;position:sticky;top:0;background:#0b1220d0;backdrop-filter:blur(6px);border-bottom:1px solid #12223a}
+    h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.2px}
+    main{max-width:900px;margin:0 auto;padding:16px}
+    .card{background:var(--card);border:1px solid #15243d;border-radius:16px;padding:16px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    .row > *{flex:1}
+    label{font-size:12px;color:var(--muted)}
+    input{width:100%;padding:11px 12px;border-radius:12px;border:1px solid #243552;background:#0d1726;color:var(--txt)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 14px;border-radius:12px;border:1px solid #174d49;background:#0e2b29;color:#d7fffb;cursor:pointer;font-weight:600}
+    .btn:hover{filter:brightness(1.05)}
+    .btn-danger{border-color:#7a1c1c;background:#3a0f10;color:#ffd7d7}
+    .btn-ghost{border-color:#23324f;background:#0e1524}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+    .list{margin-top:16px}
+    .item{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid #1a2a48;background:#0e1729;border-radius:14px;margin-bottom:10px}
+    .rank{min-width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:#0f2b2e;border:1px solid #174d49;color:#9af4ea;font-weight:700}
+    .name{font-weight:700}
+    .meta{font:12px/1.2 system-ui;color:var(--muted)}
+    .pct{margin-left:auto;font-weight:900}
+    .empty{color:var(--muted);text-align:center;padding:36px 12px}
+    footer{opacity:.5;text-align:center;font-size:12px;padding:24px}
+  </style>
+</head>
+<body>
+  <header><h1>Bible Banger</h1></header>
+  <main>
+    <section class="card" aria-labelledby="formTitle">
+      <h2 id="formTitle" style="margin:0 0 10px 0;font-size:16px;color:#bfe7ff">Add / Update</h2>
+      <div class="row">
+        <div><label>Book</label><input id="book" placeholder="e.g., Psalms" autocomplete="off" /></div>
+        <div style="max-width:160px"><label>Chapter</label><input id="chapter" placeholder="e.g., 23" autocomplete="off" /></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div><label>Bangers</label><input id="bangers" inputmode="numeric" pattern="[0-9]*" /></div>
+        <div><label>Verses</label><input id="verses" inputmode="numeric" pattern="[0-9]*" /></div>
+      </div>
+      <div class="toolbar">
+        <button class="btn" id="addBtn">Add / Update</button>
+        <button class="btn btn-ghost" id="exportBtn">Export CSV</button>
+        <button class="btn btn-danger" id="clearBtn">Clear All</button>
+      </div>
+      <p id="msg" style="color:#9af4ea;margin-top:10px"></p>
+    </section>
+
+    <section class="list" id="list"></section>
+    <div class="empty" id="empty">No entries yet. Add your first above!</div>
+  </main>
+  <footer>Data is saved on this device. Add to Home Screen for app-like experience.</footer>
+
+  <script>
+    const storeKey = 'banger_entries_v1';
+    /** @type {{book:string,chapter:string,bangers:number,verses:number}[]} */
+    let entries = [];
+
+    function load() {
+      try {
+        const raw = localStorage.getItem(storeKey);
+        entries = raw ? JSON.parse(raw) : [];
+        sort();
+        render();
+      } catch (e) { entries = []; }
+    }
+    function save() {
+      localStorage.setItem(storeKey, JSON.stringify(entries));
+    }
+    function pct(e){ return e.verses>0 ? (e.bangers/e.verses)*100 : 0; }
+    function sort(){ entries.sort((a,b)=>pct(b)-pct(a)); }
+    function nameOf(e){ return `${e.book} ${e.chapter}`; }
+
+    function addOrUpdate() {
+      const book = document.getElementById('book').value.trim();
+      const chapter = document.getElementById('chapter').value.trim();
+      const b = parseInt(document.getElementById('bangers').value.trim() || 'NaN', 10);
+      const v = parseInt(document.getElementById('verses').value.trim() || 'NaN', 10);
+
+      if(!book || !chapter) return msg('Please enter both Book and Chapter.', true);
+      if(Number.isNaN(b) || Number.isNaN(v)) return msg('Bangers and Verses must be whole numbers.', true);
+      if(v<=0) return msg('Verses must be greater than 0.', true);
+      if(b<0) return msg('Bangers cannot be negative.', true);
+
+      const i = entries.findIndex(e => e.book.toLowerCase()===book.toLowerCase() && e.chapter.toLowerCase()===chapter.toLowerCase());
+      const entry = {book, chapter, bangers:b, verses:v};
+      if(i>=0) entries[i]=entry; else entries.push(entry);
+      sort(); save(); render();
+      document.getElementById('bangers').value='';
+      document.getElementById('verses').value='';
+      msg(`${nameOf(entry)}: ${pct(entry).toFixed(2)}%`);
+    }
+
+    function del(idx){
+      entries.splice(idx,1); save(); render();
+    }
+    function clearAll(){
+      if(!entries.length) return;
+      if(confirm('Clear all entries?')){
+        entries=[]; save(); render(); msg('Cleared all.');
+      }
+    }
+    function exportCSV(){
+      if(!entries.length){ return msg('Nothing to export.', true); }
+      const header = ['Rank','Book & Chapter','Bangers','Verses','Percentage'];
+      const rows = entries.map((e,i)=>[i+1,nameOf(e),e.bangers,e.verses,pct(e).toFixed(4)]);
+      const csv = [header, ...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+      const blob = new Blob([csv], {type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = Object.assign(document.createElement('a'), {href:url, download:'bible-banger.csv'});
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+    function msg(text, isErr=false){
+      const el = document.getElementById('msg');
+      el.textContent = text;
+      el.style.color = isErr ? '#ffb4b4' : '#9af4ea';
+      setTimeout(()=>{ if(el.textContent===text) el.textContent=''; }, 3500);
+    }
+    function render(){
+      const list = document.getElementById('list');
+      list.innerHTML='';
+      const empty = document.getElementById('empty');
+      empty.style.display = entries.length ? 'none' : 'block';
+
+      entries.forEach((e, idx) => {
+        const row = document.createElement('div'); row.className='item';
+        row.innerHTML = `
+          <div class="rank">${idx+1}</div>
+          <div style="flex:1">
+            <div class="name">${nameOf(e)}</div>
+            <div class="meta">Bangers: ${e.bangers} &nbsp;&nbsp; Verses: ${e.verses}</div>
+          </div>
+          <div class="pct">${pct(e).toFixed(2)}%</div>
+          <button class="btn btn-ghost" title="Delete">Delete</button>
+        `;
+        row.querySelector('button').onclick = () => del(idx);
+        list.appendChild(row);
+      });
+    }
+
+    document.getElementById('addBtn').onclick = addOrUpdate;
+    document.getElementById('clearBtn').onclick = clearAll;
+    document.getElementById('exportBtn').onclick = exportCSV;
+
+    // PWA service worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(()=>{});
+      });
+    }
+    load();
+  </script>
+</body>
+</html>
